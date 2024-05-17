@@ -1,0 +1,1824 @@
+var tokenapi = "";
+var currency = "doge";
+var target_multi = 1.01;
+var basebet = 0;
+var amount = basebet;
+var running = true;
+var nextbet = 0;
+var win = false;
+
+var bethigh = false;
+var chance = 49.5
+
+var losestreak = 0;
+var winstreak  = 0;
+var highest_streak = [0];
+var lowest_streak = [0];
+var current_balance = 0;
+var balance = 0;
+var betcount = 0;
+var bets = 0
+var wins = 0;
+var losses = 0;
+var wagered = 0;
+var profit_total = 0;
+var highest_profit = [0];
+var lowest_profit = [0];
+var highest_bet = [0];
+var currentstreak = 0;
+var profit = 0;
+var previousbet = 0;
+var currentprofit = 0;
+var current_profit = 0;
+
+var lastBet = {'amount': 0, 'win': false, 'Roll': 0, 'payoutMultiplier': 0, 'chance': 0, 'target': 0, 'payout': 0, 'percent': 0, 'targetNumber': 0}
+
+var dps = []
+var chart = ''
+var color = "red"
+
+var started_bal = 0;
+
+var condition = "below";
+
+serverSeed = "";
+clientSeed = "";
+nonce = 0;
+simrunning = false;
+balance_sim = 0;
+target_sim = 0;
+condition_sim = "above";
+bet_sim = 0
+
+function dobet() {}
+
+var htmlEditor = CodeMirror.fromTextArea(document.getElementById("code"), {
+	lineNumbers: true,
+	mode: 'lua',
+	// theme: 'default',
+});
+
+var htmlEditor2 = CodeMirror.fromTextArea(document.getElementById("jscode"), {
+	lineNumbers: true,
+	mode: 'javascript',
+	// theme: 'default',
+});
+
+function countTime() {
+	startTime = new Date()
+    setInterval(() => {
+	if(running){
+        playTime = (new Date().getTime()) - startTime;
+        playDays = Math.floor(playTime / (1e3 * 6e1 * 6e1 * 24));
+        playHours = Math.floor((playTime % (1e3 * 6e1 * 6e1 * 24)) / (1e3 * 6e1 * 6e1));
+        playMinutes = Math.floor((playTime % (1e3 * 6e1 * 6e1)) / (1e3 * 6e1));
+        playSeconds = Math.floor((playTime % (1e3 * 6e1)) / 1e3);
+        $('#wdbTime').html(`${playDays}:${playHours}:${playMinutes}:${playSeconds}`);
+		}
+    }, 1e3)
+}
+
+function deleteTable(){
+		document.getElementById("wdbHistory").innerHTML = "";
+}
+
+if(localStorage.getItem("modecode") != null){
+	document.getElementById("wdbMenuMode").options.selectedIndex = parseInt(localStorage.getItem("modecode"));
+	showOnChange(true);
+} 
+
+
+if(localStorage.getItem("jscode") != null){
+	htmlEditor2.setValue(localStorage.getItem("jscode"));
+} 
+
+if(localStorage.getItem("luacode") != null){
+	htmlEditor.setValue(localStorage.getItem("luacode"));
+} 
+
+
+function resetseed(e){
+
+ var client = e;
+ if(client == undefined){
+	client = randomString(10);
+ }
+var body = {
+		operationName:"RotateSeedPair",
+		variables:{
+        "seed": client
+		},
+		query:"mutation RotateSeedPair($seed: String!) {\n  rotateSeedPair(seed: $seed) {\n    clientSeed {\n      user {\n        id\n        activeClientSeed {\n          id\n          seed\n          __typename\n        }\n        activeServerSeed {\n          id\n          nonce\n          seedHash\n          nextSeedHash\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n"		}
+		
+	var mirror = document.getElementById("mirrors").value;
+	fetch('https://' +  mirror + '/_api/graphql', {
+		method: 'post',
+		body:    JSON.stringify(body),
+		headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+	})
+	.then(res => res.json())
+	.then(json => outseed(json))
+	.catch(function(err, json) {
+		console.log(err);
+		setTimeout(() => {
+			//initUser();							
+		}, "2000");
+	});
+}
+
+
+function outseed(json){
+	if(json.errors != undefined){
+		log(json.errors[0].errorType);
+	} else {
+		log("Seed has been reset.")
+	}
+
+}
+
+function toFixedNo(num, fixed) {
+    var re = new RegExp('^-?\\d+(?:\.\\d{0,' + (fixed || -1) + '})?');
+    return num.toString().match(re)[0];
+}
+
+function randomString(length) {
+	var chars = '_-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-';
+	var result = '';
+	for (var i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)];
+	return result;
+}
+
+function sLeep(n){
+    var now = new Date().getTime();
+    while(new Date().getTime() < now + n){ /* do nothing */ };
+    console.log("betdelay: " +n+ " ms");  
+}
+
+function showOnChange(e) {
+	var elem = document.getElementById("wdbMenuMode");
+	var value = elem.options[elem.selectedIndex].value;
+	if(value == "lua")
+	{
+		document.getElementsByClassName('code-lua')[0].style.visibility  = "visible";
+		document.getElementsByClassName('code-js')[0].style.visibility  = "hidden";
+	}
+	else if(value == "js")
+	{
+		document.getElementsByClassName('code-lua')[0].style.visibility  = "hidden";
+		document.getElementsByClassName('code-js')[0].style.visibility  = "visible";
+	}
+	document.getElementById('wdbWrapLog').style.visibility  = "hidden";
+	document.getElementsByClassName('wdbSim')[0].style.visibility = "hidden";
+ }
+
+if(localStorage.getItem("apitoken") != null){
+	document.getElementById("tokenkey").value = localStorage.getItem("apitoken");
+	tokenapi = localStorage.getItem("apitoken");
+} 
+
+const inputHandler = function(e) {
+  localStorage.setItem("apitoken", e.target.value);
+  tokenapi = e.target.value;
+  if(e.target.value.length >= 96){
+	
+	setTimeout(() => {
+		window.location.reload(true);							
+	}, "1000");
+	
+  }
+}
+
+if(localStorage.getItem("clientseed") != null){
+	document.getElementById("clientseed").value = localStorage.getItem("clientseed");
+	serverSeed = localStorage.getItem("clientseed");
+} 
+
+if(localStorage.getItem("serverseed") != null){
+	document.getElementById("serverseed").value = localStorage.getItem("serverseed");
+	serverSeed = localStorage.getItem("serverseed");
+} 
+
+const serverHandler = function(e) {
+  localStorage.setItem("serverseed", e.target.value);
+  serverSeed = e.target.value;
+}
+
+seedchange = document.getElementById("serverseed");
+seedchange.addEventListener('input', serverHandler);
+
+
+const clientHandler = function(e) {
+  localStorage.setItem("clientseed", e.target.value);
+  serverSeed = e.target.value;
+}
+
+clientchange = document.getElementById("clientseed");
+clientchange.addEventListener('input', clientHandler);
+
+htmlEditor.on("change", function (e) {
+	localStorage.setItem("luacode", e.getValue());
+});
+htmlEditor2.on("change", function (e) {
+	localStorage.setItem("jscode", e.getValue());
+});
+
+apichange = document.getElementById("tokenkey");
+apichange.addEventListener('input', inputHandler);
+
+if (localStorage.getItem("gameselect") != null) {
+	document.getElementById("gameselect").value = localStorage.getItem("gameselect");
+}
+
+if (localStorage.getItem("mirror") != null) {
+	document.getElementById("mirrors").value = localStorage.getItem("mirror");
+}
+$('#gameselect').on('change', function (e) {
+	var mirror = document.getElementById('gameselect');
+	var input_mirror = mirror.options[mirror.selectedIndex].value;
+	localStorage.setItem("gameselect", input_mirror);
+	//window.location.reload(true);
+});
+
+$('#wdbMenuMode').on('change', function (e) {
+	var codemode = document.getElementById("wdbMenuMode").options.selectedIndex;
+	localStorage.setItem("modecode", codemode);
+	document.getElementById("wdbMenuMode").options.selectedIndex = parseInt(localStorage.getItem("modecode"));
+	showOnChange(e);
+	//window.location.reload(true);
+});
+
+
+$('#mirrors').on('change', function (e) {
+	var mirror = document.getElementById('mirrors');
+	var input_mirror = mirror.options[mirror.selectedIndex].value;
+	localStorage.setItem("mirror", input_mirror);
+	window.location.reload(true);
+});
+
+function downloadFile() {
+	var elem = document.getElementById("wdbMenuMode");
+	var value = elem.options[elem.selectedIndex].value;
+	if(value == "lua")
+	{
+		var obj = htmlEditor.getValue();
+		var filename = "LUA_" + new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0].replace('T','-') + ".lua";
+		var blob = new Blob([obj], {type: 'text/plain'});
+		if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+			window.navigator.msSaveOrOpenBlob(blob, filename);
+		} else{
+			var e = document.createEvent('MouseEvents'),
+			a = document.createElement('a');
+			a.download = filename;
+			a.href = window.URL.createObjectURL(blob);
+			a.dataset.downloadurl = ['text/plain', a.download, a.href].join(':');
+			e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+			a.dispatchEvent(e);
+		}	
+	}
+	else if(value == "js")
+	{
+		var obj = htmlEditor2.getValue();
+		var filename = "JS_" + new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().split('.')[0].replace('T','-') + ".js";
+		var blob = new Blob([obj], {type: 'text/plain'});
+		if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+			window.navigator.msSaveOrOpenBlob(blob, filename);
+		} else{
+			var e = document.createEvent('MouseEvents'),
+			a = document.createElement('a');
+			a.download = filename;
+			a.href = window.URL.createObjectURL(blob);
+			a.dataset.downloadurl = ['text/plain', a.download, a.href].join(':');
+			e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+			a.dispatchEvent(e);
+		}
+	}
+}
+
+
+
+var inputcommand = document.getElementById("runinput");
+
+inputcommand.addEventListener("keyup", function(event) {
+
+  if (event.keyCode === 13) {
+
+    event.preventDefault();
+	
+    document.getElementById("runcmd").click();
+
+  }
+});
+
+
+var inputcmd = document.getElementById("runinput").innerHTML;
+var cmdrunn = document.getElementById("runcmd");
+cmdrunn.addEventListener('click', function() {  $('#loop').text().length?$('#loop').replaceWith(`\x3Cscript id="loop"\x3E${$('#runinput').val().trim()}\x3C/script\x3E`):$('head').append(`\x3Cscript id="loop"\x3E${$('#runinput').val().trim()}\x3C/script\x3E`) }, false);
+
+
+function ShowConsoleLog(){
+
+		document.getElementsByClassName('code-lua')[0].style.visibility  = "hidden";
+		document.getElementsByClassName('code-js')[0].style.visibility  = "hidden";
+		document.getElementById('wdbWrapLog').style.visibility  = "visible";
+		document.getElementsByClassName('wdbSim')[0].style.visibility = "hidden";
+}
+
+function ShowSimulate(){
+
+		document.getElementsByClassName('code-lua')[0].style.visibility  = "hidden";
+		document.getElementsByClassName('code-js')[0].style.visibility  = "hidden";
+		document.getElementById('wdbWrapLog').style.visibility  = "hidden";
+		document.getElementsByClassName('wdbSim')[0].style.visibility = "visible";
+}
+
+
+
+setTimeout(() => {
+	initUser();			
+	loadLua();	
+	resetChart();
+	//startScoket();
+}, "200");
+
+function initUser(){
+
+var body = {
+		operationName:"initialUserRequest",
+		variables:{},
+		query:"query initialUserRequest {\n  user {\n    ...UserAuth\n    __typename\n  }\n}\n\nfragment UserAuth on User {\n  id\n  name\n  email\n  hasPhoneNumberVerified\n  hasEmailVerified\n  hasPassword\n  intercomHash\n  createdAt\n  hasTfaEnabled\n  mixpanelId\n  hasOauth\n  isKycBasicRequired\n  isKycExtendedRequired\n  isKycFullRequired\n  kycBasic {\n    id\n    status\n    __typename\n  }\n  kycExtended {\n    id\n    status\n    __typename\n  }\n  kycFull {\n    id\n    status\n    __typename\n  }\n  flags {\n    flag\n    __typename\n  }\n  roles {\n    name\n    __typename\n  }\n  balances {\n    ...UserBalanceFragment\n    __typename\n  }\n  activeClientSeed {\n    id\n    seed\n    __typename\n  }\n  previousServerSeed {\n    id\n    seed\n    __typename\n  }\n  activeServerSeed {\n    id\n    seedHash\n    nextSeedHash\n    nonce\n    blocked\n    __typename\n  }\n  __typename\n}\n\nfragment UserBalanceFragment on UserBalance {\n  available {\n    amount\n    currency\n    __typename\n  }\n  vault {\n    amount\n    currency\n    __typename\n  }\n  __typename\n}\n"		}
+		
+	var mirror = document.getElementById("mirrors").value;
+	fetch('https://' +  mirror + '/_api/graphql', {
+		method: 'post',
+		body:    JSON.stringify(body),
+		headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+	})
+	.then(res => res.json())
+	.then(json => outjson(json))
+	.catch(function(err, json) {
+		console.log(err);
+		setTimeout(() => {
+			//initUser();							
+		}, "2000");
+	});
+
+
+}
+
+function outjson(json){
+
+	//let nicker = json.data.user.name
+	//localStorage.setItem("nicks", nicker);
+	
+	select = document.getElementById('wdbMenuCoin');
+	for (var i = 0; i < json.data.user.balances.length; i++)
+	{
+		var opt = document.createElement('option');
+		opt.value = json.data.user.balances[i].available.currency;
+		opt.innerHTML = json.data.user.balances[i].available.currency;
+		select.appendChild(opt);
+		document.getElementById("wdbMenuCoin").options[0].selected = 'selected';
+	}
+	
+	for (var i = 0; i < json.data.user.balances.length; i++)
+	{
+		if (json.data.user.balances[i].available.currency == currency)
+		{
+			current_balance = json.data.user.balances[i].available.amount;
+			balance = current_balance;
+			var balan = document.getElementById("wdbBalance");
+			balan.innerHTML = balance.toFixed(8);
+
+		}
+	}
+}
+
+$('#wdbMenuCoin').on('change', function (e) {
+	var curry = document.getElementById('wdbMenuCoin').value;
+	localStorage.setItem("currenc", curry);
+	currency = curry;
+	userBalances();
+});
+
+
+function indexMatchingText(text) {
+    var opts = document.getElementById("wdbMenuCoin").options;
+	for(var i = 0; i < opts.length; i++) {
+		if(opts[i].innerText == text) {
+			return i;
+		}
+	}
+	return 0;
+}
+
+
+function drawChart() {
+    dps = [{ x: betcount, y: profit_total }]
+    chart = new CanvasJS.Chart('chartContainer', {
+        backgroundColor: '#e8ebeb',
+        theme: 'light2',
+        title: {
+            //text: BOT_URL,
+            fontColor: 'white',
+            fontSize: 20
+        },
+        data: [{
+            type: 'line',
+            markerSize: 0,
+            dataPoints: dps
+        }]
+    })
+    chart.render();
+}
+
+function updateChart() {
+    dps.push({
+        x: betcount,
+        y: profit_total,
+        color: color
+    })
+    if (dps[dps.length - 2]) dps[dps.length - 2].lineColor = color;
+    if (dps.length > 100) dps.shift();
+    chart.render();
+}
+
+
+function resetChart() {
+    betcount = 0;
+    profit_total = 0;
+    return drawChart();
+}
+
+function log(val){
+	document.getElementById("wdbLog").value  += val + "\n"
+	document.getElementById("wdbLog").scrollTop = document.getElementById("wdbLog").scrollHeight 
+	var text = $("#wdbLog").val();   
+	var lines = text.split(/\r|\r\n|\n/);
+	var count = lines.length;
+	if(parseInt(count) > 200){
+		$('#wdbLog').val(function(_, val){    
+			return val.split('\n').slice(1).join('\n');
+		});
+	}
+}
+
+function logSim(val){
+	document.getElementById("wdbSimLog").value  += val + "\n"
+	document.getElementById("wdbSimLog").scrollTop = document.getElementById("wdbSimLog").scrollHeight 
+	var text = $("#wdbSimLog").val();   
+	var lines = text.split(/\r|\r\n|\n/);
+	var count = lines.length;
+	if(parseInt(count) > 200){
+		$('#wdbSimLog').val(function(_, val){    
+			return val.split('\n').slice(1).join('\n');
+		});
+	}
+}
+
+function deleteLogs(){
+	document.getElementById("wdbLog").value = "";
+}
+
+function stopOnWin() {
+    running = false;
+}
+
+
+setTimeout(() => {
+	if (localStorage.getItem("currenc") != null) {
+	//document.getElementById("currenc").value = localStorage.getItem("currenc");
+		currency = localStorage.getItem("currenc");
+		document.getElementById("wdbMenuCoin").options[indexMatchingText(currency)].selected = 'selected';
+	} else {
+		document.getElementById("wdbMenuCoin").options[0].selected = 'selected';
+		currency = document.getElementById("wdbMenuCoin").value;
+	}
+	userBalances();	
+}, "1100");
+
+function userBalances(){
+
+var body = {
+		operationName:"UserBalances",
+		variables:{},
+		query:"query UserBalances {\n  user {\n    id\n    balances {\n      available {\n        amount\n        currency\n        __typename\n      }\n      vault {\n        amount\n        currency\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n"		}
+		
+	var mirror = document.getElementById("mirrors").value;
+	fetch('https://' +  mirror + '/_api/graphql', {
+		method: 'post',
+		body:    JSON.stringify(body),
+		headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+	})
+	.then(res => res.json())
+	.then(json => outbals(json))
+	.catch(function(err, json) {
+		console.log(err);
+		setTimeout(() => {
+			//initUser();							
+		}, "2000");
+	});
+
+
+}
+
+function outbals(json){
+
+	for (var i = 0; i < json.data.user.balances.length; i++)
+	{
+		if (json.data.user.balances[i].available.currency == document.getElementById('wdbMenuCoin').value)
+		{
+			current_balance = json.data.user.balances[i].available.amount;
+			balance = current_balance;
+			var balan = document.getElementById("wdbBalance");
+			balan.innerHTML = balance.toFixed(8);
+
+		}
+	}
+}
+
+function LimboBet(amount, target_multi){
+	var body = {
+		variables:{
+		"multiplierTarget": target_multi,
+        "identifier": randomString(21),
+        "amount": amount,
+        "currency": document.getElementById('wdbMenuCoin').value
+		},
+		query:"mutation LimboBet($amount: Float!, $multiplierTarget: Float!, $currency: CurrencyEnum!, $identifier: String!) {\n  limboBet(\n    amount: $amount\n    currency: $currency\n    multiplierTarget: $multiplierTarget\n    identifier: $identifier\n  ) {\n    ...CasinoBet\n    state {\n      ...CasinoGameLimbo\n    }\n  }\n}\n\nfragment CasinoBet on CasinoBet {\n  id\n  active\n  payoutMultiplier\n  amountMultiplier\n  amount\n  payout\n  updatedAt\n  currency\n  game\n  user {\n    id\n    name\n  }\n}\n\nfragment CasinoGameLimbo on CasinoGameLimbo {\n  result\n  multiplierTarget\n}\n"	}
+		
+	var mirror = document.getElementById("mirrors").value;
+	fetch('https://' +  mirror + '/_api/graphql', {
+		method: 'post',
+		body:    JSON.stringify(body),
+		headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+	})
+	.then(res => res.json())
+	.then(json => data(json))
+	.catch(function(err, json) {
+		console.log(err);
+		if(running == true)
+		{
+			setTimeout(() => {
+				LimboBet(amount, target_multi)							
+			}, "2000");
+			
+		}
+	});
+	
+}
+
+function DiceBet(amount, chance, bethigh){
+	if(document.getElementById("mirrors").value.includes("primedice")){
+	
+		var target = 49.5
+		if(bethigh == false){
+			target = chance
+			cond = "below"
+		} else {
+			target = 100 - 0.01 - chance
+			cond = "above"
+		}
+		
+
+		var body = {
+			variables:{ 
+			"target": target,
+			"condition": cond,
+			"amount": amount,
+			"currency": document.getElementById('wdbMenuCoin').value
+			},
+			operationName: "PrimediceRoll",
+			query:"mutation PrimediceRoll($amount: Float!, $target: Float!, $condition: CasinoGamePrimediceConditionEnum!, $currency: CurrencyEnum!) {\n  primediceRoll(amount: $amount, target: $target, condition: $condition, currency: $currency) {\n    ...CasinoBetFragment\n    state {\n      ...PrimediceStateFragment\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment CasinoBetFragment on CasinoBet {\n  id\n  active\n  payoutMultiplier\n  amountMultiplier\n  amount\n  payout\n  updatedAt\n  currency\n  game\n  user {\n    id\n    name\n    __typename\n  }\n  __typename\n}\n\nfragment PrimediceStateFragment on CasinoGamePrimedice {\n  result\n  target\n  condition\n  __typename\n}\n"	}
+			
+		var mirror = document.getElementById("mirrors").value;
+		fetch('https://' +  mirror + '/_api/graphql', {
+			method: 'post',
+			body:    JSON.stringify(body),
+			headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+		})
+		.then(res => res.json())
+		.then(json => data(json))
+		.catch(function(err, json) {
+			console.log(err);
+			if(running == true)
+			{
+				setTimeout(() => {
+					 DiceBet(amount, chance, bethigh)							
+				}, "2000");
+				
+			}
+		});
+	
+	} else {
+	
+	var target = 49.5
+	if(bethigh == false){
+		target = chance
+		cond = "below"
+	} else {
+		target = 100 - chance
+		cond = "above"
+	}
+	
+
+	var body = {
+		variables:{ 
+		"target": target,
+        "condition": cond,
+        "identifier": randomString(21),
+        "amount": amount,
+        "currency": document.getElementById('wdbMenuCoin').value
+		},
+		query:"mutation DiceRoll($amount: Float!, $target: Float!, $condition: CasinoGameDiceConditionEnum!, $currency: CurrencyEnum!, $identifier: String!) {\n  diceRoll(\n    amount: $amount\n    target: $target\n    condition: $condition\n    currency: $currency\n    identifier: $identifier\n  ) {\n    ...CasinoBet\n    state {\n      ...CasinoGameDice\n    }\n  }\n}\n\nfragment CasinoBet on CasinoBet {\n  id\n  active\n  payoutMultiplier\n  amountMultiplier\n  amount\n  payout\n  updatedAt\n  currency\n  game\n  user {\n    id\n    name\n  }\n}\n\nfragment CasinoGameDice on CasinoGameDice {\n  result\n  target\n  condition\n}\n"	}
+		
+	var mirror = document.getElementById("mirrors").value;
+	fetch('https://' +  mirror + '/_api/graphql', {
+		method: 'post',
+		body:    JSON.stringify(body),
+		headers: { 'Content-Type': 'application/json','x-access-token': tokenapi},
+	})
+	.then(res => res.json())
+	.then(json => data(json))
+	.catch(function(err, json) {
+		console.log(err);
+		if(running == true)
+		{
+			setTimeout(() => {
+				 DiceBet(amount, chance, bethigh)							
+			}, "2000");
+			
+		}
+	});
+	}
+	
+}
+
+function data(json){
+	if(running == true)
+	{
+		if(json.data.hasOwnProperty("primediceRoll"))
+		{
+			
+			var table = document.getElementById("wdbHistory");
+			var multiplierOut = json.data.primediceRoll.payoutMultiplier;
+			var nicname = "";
+			var crpamount = json.data.primediceRoll.amount;
+			var payout = json.data.primediceRoll.payout;
+			
+			var str_amount = crpamount;
+			var str_payout = payout.toFixed(8);
+			var str_payoutMultiplier = multiplierOut.toFixed(2);
+			var str_currency = currency;
+			var str_game = "limbo";
+			var str_user = "poky1084";
+			var str_updatedAt = "2023"
+			var current_result = json.data.primediceRoll.state.result.toFixed(2);
+			var multiplierTarget = json.data.primediceRoll.state.target.toFixed(2);
+			
+			lastBet.amount = json.data.primediceRoll.amount;
+			lastBet.payoutMultiplier = json.data.primediceRoll.payoutMultiplier;
+			lastBet.Roll = json.data.primediceRoll.state.result;
+			lastBet.payout = json.data.primediceRoll.payout;
+			lastBet.target = json.data.primediceRoll.state.target;
+			
+			if(json.data.primediceRoll.state.condition == "below"){
+				bethigh = false;
+			} else {
+				bethigh = true;
+			}
+			
+			if(bethigh == false){
+				lastBet.chance = json.data.primediceRoll.state.target;
+			} else {
+				lastBet.chance = 100 - 0.01 - json.data.primediceRoll.state.target;
+			}
+			
+			
+			if(json.data.primediceRoll.payoutMultiplier > 0){
+				win = true;
+				lastBet.win = true;
+				color = "green"
+				//win
+				winstreak++;
+				wins++;
+				losestreak = 0;
+					
+			} else {
+
+				win = false;
+				lastBet.win = false;
+				color = "red"
+				losses++;
+				losestreak++;
+				winstreak = 0;
+				
+											
+			} 
+		
+			current_profit = parseFloat(json.data.primediceRoll.payout) - parseFloat(json.data.primediceRoll.amount);
+			profit_total += parseFloat(json.data.primediceRoll.payout) - parseFloat(json.data.primediceRoll.amount);
+			wagered += parseFloat(amount);
+			
+			var row = document.createElement("tr");
+			
+			var tdbets = document.createElement("td");
+			var tdamount = document.createElement("td");
+			var tdhigh = document.createElement("td");
+			var tdTargetChance = document.createElement("td");
+			var tdRollChance= document.createElement("td");
+			var tdProfit = document.createElement("td");
+			var tdPayout = document.createElement("td");
+			var tdTargetNumber = document.createElement("td");
+			var tdRollNumber = document.createElement("td");
+			var tdNonce = document.createElement("td");
+			var tdBetID = document.createElement("td");
+			
+			tdbets.innerHTML = wins + losses;
+			tdamount.innerHTML = json.data.primediceRoll.amount.toFixed(8)
+			
+			var tdcheck = document.createElement("input");
+			tdcheck.type = "checkbox";
+			tdcheck.name = "checked";
+			if(bethigh){
+				tdcheck.checked = true;
+			} else {
+				tdcheck.checked = false;
+			}
+			tdcheck.id = "checked";
+			
+			tdhigh.appendChild(tdcheck);
+			tdTargetChance.innerHTML = lastBet.chance.toFixed(4)
+			if(bethigh == false){
+				tdRollChance.innerHTML = json.data.primediceRoll.state.result.toFixed(4)
+			} else {
+				tdRollChance.innerHTML = (100 - 0.01 - json.data.primediceRoll.state.result).toFixed(4)
+			}
+			
+			tdProfit.innerHTML = current_profit.toFixed(8)
+			if(bethigh){
+				lastBet.targetNumber = (99 /  (lastBet.chance - 0.01));
+				tdTargetNumber.innerHTML = ">" + (99 /  (lastBet.chance - 0.01)).toFixed(4)
+			} else {
+				lastBet.targetNumber = (99 / lastBet.chance);
+				tdTargetNumber.innerHTML = ">" + (99 / lastBet.chance).toFixed(4)
+			}
+			tdRollNumber.innerHTML = json.data.primediceRoll.state.result.toFixed(2)
+			tdNonce.innerHTML = json.data.primediceRoll.game;
+			tdBetID.innerHTML = json.data.primediceRoll.id;
+			tdPayout.innerHTML = json.data.primediceRoll.payout.toFixed(8);
+			
+			row.appendChild(tdbets);
+			row.appendChild(tdamount);
+			row.appendChild(tdhigh);
+			row.appendChild(tdTargetChance);
+			row.appendChild(tdRollChance);
+			row.appendChild(tdProfit);
+			row.appendChild(tdPayout);
+			row.appendChild(tdTargetNumber);
+			row.appendChild(tdRollNumber);
+			row.appendChild(tdNonce);
+			row.appendChild(tdBetID);
+					
+			
+
+				
+			
+			
+			
+			if(win){
+				row.style.background = "#91F190";
+			} else {
+				row.style.background = "#FFC0CB";
+			}
+			
+			table.prepend(row);
+			
+			if (table.rows.length > document.getElementById("wdbMaxRows").value)
+			{
+				table.deleteRow(table.rows.length - 1);
+			}
+		
+			
+			if(winstreak > losestreak){
+				currentstreak = winstreak;
+			} else {
+				currentstreak = -losestreak;
+			}
+		
+			if(highest_bet[highest_bet.length-1] < json.data.primediceRoll.amount){
+				highest_bet.pop();
+				highest_bet.push(json.data.primediceRoll.amount);
+			}
+			if(highest_profit[highest_profit.length-1] < profit_total){
+				highest_profit.pop();
+				highest_profit.push(profit_total);
+			}
+			if(lowest_profit[lowest_profit.length-1] > profit_total){
+				lowest_profit.pop();
+				lowest_profit.push(profit_total);
+			}
+			if(highest_streak[highest_streak.length-1] < currentstreak){
+				highest_streak.pop();
+				highest_streak.push(currentstreak);
+			}
+			if(lowest_streak[lowest_streak.length-1] > currentstreak){
+				lowest_streak.pop();
+				lowest_streak.push(currentstreak);
+			}
+
+			balance = current_balance;
+			profit = profit_total;
+			previousbet = json.data.primediceRoll.amount;
+			currentprofit = current_profit;
+			betcount++;
+			bets = betcount;
+		
+			
+			updateChart();
+			
+			
+			//document.getElementById("multi").innerHTML = toFixedNo(json.data.limboBet.state.result, 2);
+			document.getElementById("wdbProfit").innerHTML = profit_total.toFixed(8);
+			document.getElementById("wdbWagered").innerHTML = wagered.toFixed(8);
+			document.getElementById("wdbHighProfit").innerHTML = Math.max.apply(null, highest_profit).toFixed(8);
+			document.getElementById("wdbHighLose").innerHTML = Math.min.apply(null, lowest_profit).toFixed(8);
+			document.getElementById("wdbHighBet").innerHTML = Math.max.apply(null, highest_bet).toFixed(8);
+			document.getElementById("wdbBets").innerHTML = bets;
+			document.getElementById("wdbWins").innerHTML = wins;
+			document.getElementById("wdbLosses").innerHTML = losses;
+			document.getElementById("wdbCurrentStreak").innerHTML = currentstreak;
+			document.getElementById("wdbHighLowStreak").innerHTML = Math.max.apply(null, highest_streak) + " / " + Math.min.apply(null, lowest_streak);
+			document.getElementById("wdbPercentProfit").innerHTML = (profit_total / started_bal * 100).toFixed(2);
+			document.getElementById("wdbPercentWagered").innerHTML = (wagered / started_bal).toFixed(2);
+			
+			lastBet.percent = (profit_total / started_bal * 100)
+			
+			var elem = document.getElementById("wdbMenuMode");
+			var value = elem.options[elem.selectedIndex].value;
+			if(value == "lua"){
+				sendLua();
+			} else if(value == "js"){
+				dobet();
+			}
+			amount = nextbet;
+			
+			target_multi = 99 / chance;
+			lastBet.amount = json.data.primediceRoll.amount;
+			lastBet.target = json.data.primediceRoll.state.target;
+			DiceBet(amount, chance, bethigh)
+		}
+		if(json.data.hasOwnProperty("diceRoll"))
+		{
+			
+			var table = document.getElementById("wdbHistory");
+			var multiplierOut = json.data.diceRoll.payoutMultiplier;
+			var nicname = "";
+			var crpamount = json.data.diceRoll.amount;
+			var payout = json.data.diceRoll.payout;
+			
+			var str_amount = crpamount;
+			var str_payout = payout.toFixed(8);
+			var str_payoutMultiplier = multiplierOut.toFixed(2);
+			var str_currency = currency;
+			var str_game = "limbo";
+			var str_user = "poky1084";
+			var str_updatedAt = "2023"
+			var current_result = json.data.diceRoll.state.result.toFixed(2);
+			var multiplierTarget = json.data.diceRoll.state.target.toFixed(2);
+			
+			lastBet.amount = json.data.diceRoll.amount;
+			lastBet.payoutMultiplier = json.data.diceRoll.payoutMultiplier;
+			lastBet.Roll = json.data.diceRoll.state.result;
+			lastBet.payout = json.data.diceRoll.payout;
+			lastBet.target = json.data.diceRoll.state.target;
+			if(json.data.diceRoll.state.condition == "below"){
+				bethigh = false;
+			} else {
+				bethigh = true;
+			}
+			
+			if(bethigh == false){
+				lastBet.chance = json.data.diceRoll.state.target;
+			} else {
+				lastBet.chance = 100 - json.data.diceRoll.state.target;
+			}
+			
+			
+			if(json.data.diceRoll.payoutMultiplier > 0){
+				win = true;
+				lastBet.win = true;
+				color = "green"
+				//win
+				winstreak++;
+				wins++;
+				losestreak = 0;
+					
+			} else {
+
+				win = false;
+				lastBet.win = false;
+				color = "red"
+				losses++;
+				losestreak++;
+				winstreak = 0;
+				
+											
+			} 
+		
+			current_profit = parseFloat(json.data.diceRoll.payout) - parseFloat(json.data.diceRoll.amount);
+			profit_total += parseFloat(json.data.diceRoll.payout) - parseFloat(json.data.diceRoll.amount);
+			wagered += parseFloat(amount);
+			
+			var row = document.createElement("tr");
+			
+			var tdbets = document.createElement("td");
+			var tdamount = document.createElement("td");
+			var tdhigh = document.createElement("td");
+			var tdTargetChance = document.createElement("td");
+			var tdRollChance= document.createElement("td");
+			var tdProfit = document.createElement("td");
+			var tdPayout = document.createElement("td");
+			var tdTargetNumber = document.createElement("td");
+			var tdRollNumber = document.createElement("td");
+			var tdNonce = document.createElement("td");
+			var tdBetID = document.createElement("td");
+			
+			tdbets.innerHTML = wins + losses;
+			tdamount.innerHTML = json.data.diceRoll.amount.toFixed(8)
+			
+			var tdcheck = document.createElement("input");
+			tdcheck.type = "checkbox";
+			tdcheck.name = "checked";
+			if(bethigh){
+				tdcheck.checked = true;
+			} else {
+				tdcheck.checked = false;
+			}
+			tdcheck.id = "checked";
+			
+			tdhigh.appendChild(tdcheck);
+			tdTargetChance.innerHTML = lastBet.chance.toFixed(4)
+			if(bethigh == false){
+				tdRollChance.innerHTML = json.data.diceRoll.state.result.toFixed(4)
+			} else {
+				tdRollChance.innerHTML = (100 - json.data.diceRoll.state.result).toFixed(4)
+			}
+			
+			tdProfit.innerHTML = current_profit.toFixed(8)
+			if(bethigh){
+				lastBet.targetNumber = (99 / (lastBet.chance));
+				tdTargetNumber.innerHTML = ">" + (99 / (lastBet.chance)).toFixed(4)
+			} else {
+				lastBet.targetNumber = (99 / lastBet.chance);
+				tdTargetNumber.innerHTML = ">" + (99 / lastBet.chance).toFixed(4)
+			}
+			tdRollNumber.innerHTML = json.data.diceRoll.state.result.toFixed(2)
+			tdNonce.innerHTML = json.data.diceRoll.game;
+			tdBetID.innerHTML = json.data.diceRoll.id;
+			tdPayout.innerHTML = json.data.diceRoll.payout.toFixed(8);
+			
+			row.appendChild(tdbets);
+			row.appendChild(tdamount);
+			row.appendChild(tdhigh);
+			row.appendChild(tdTargetChance);
+			row.appendChild(tdRollChance);
+			row.appendChild(tdProfit);
+			row.appendChild(tdPayout);
+			row.appendChild(tdTargetNumber);
+			row.appendChild(tdRollNumber);
+			row.appendChild(tdNonce);
+			row.appendChild(tdBetID);			
+					
+			
+
+				
+			
+			
+			
+			if(win){
+				row.style.background = "#91F190";
+			} else {
+				row.style.background = "#FFC0CB";
+			}
+			
+			table.prepend(row);
+			
+			if (table.rows.length > document.getElementById("wdbMaxRows").value)
+			{
+				table.deleteRow(table.rows.length - 1);
+			}
+		
+			
+			if(winstreak > losestreak){
+				currentstreak = winstreak;
+			} else {
+				currentstreak = -losestreak;
+			}
+		
+			if(highest_bet[highest_bet.length-1] < json.data.diceRoll.amount){
+				highest_bet.pop();
+				highest_bet.push(json.data.diceRoll.amount);
+			}
+			if(highest_profit[highest_profit.length-1] < profit_total){
+				highest_profit.pop();
+				highest_profit.push(profit_total);
+			}
+			if(lowest_profit[lowest_profit.length-1] > profit_total){
+				lowest_profit.pop();
+				lowest_profit.push(profit_total);
+			}
+			if(highest_streak[highest_streak.length-1] < currentstreak){
+				highest_streak.pop();
+				highest_streak.push(currentstreak);
+			}
+			if(lowest_streak[lowest_streak.length-1] > currentstreak){
+				lowest_streak.pop();
+				lowest_streak.push(currentstreak);
+			}
+
+			balance = current_balance;
+			profit = profit_total;
+			previousbet = json.data.diceRoll.amount;
+			currentprofit = current_profit;
+			betcount++;
+			bets = betcount;
+		
+			
+			updateChart();
+			
+			
+			//document.getElementById("multi").innerHTML = toFixedNo(json.data.limboBet.state.result, 2);
+			document.getElementById("wdbProfit").innerHTML = profit_total.toFixed(8);
+			document.getElementById("wdbWagered").innerHTML = wagered.toFixed(8);
+			document.getElementById("wdbHighProfit").innerHTML = Math.max.apply(null, highest_profit).toFixed(8);
+			document.getElementById("wdbHighLose").innerHTML = Math.min.apply(null, lowest_profit).toFixed(8);
+			document.getElementById("wdbHighBet").innerHTML = Math.max.apply(null, highest_bet).toFixed(8);
+			document.getElementById("wdbBets").innerHTML = bets;
+			document.getElementById("wdbWins").innerHTML = wins;
+			document.getElementById("wdbLosses").innerHTML = losses;
+			document.getElementById("wdbCurrentStreak").innerHTML = currentstreak;
+			document.getElementById("wdbHighLowStreak").innerHTML = Math.max.apply(null, highest_streak) + " / " + Math.min.apply(null, lowest_streak);
+			document.getElementById("wdbPercentProfit").innerHTML = (profit_total / started_bal * 100).toFixed(2);
+			document.getElementById("wdbPercentWagered").innerHTML = (wagered / started_bal).toFixed(2);
+			
+			lastBet.percent = (profit_total / started_bal * 100)
+			
+			var elem = document.getElementById("wdbMenuMode");
+			var value = elem.options[elem.selectedIndex].value;
+			if(value == "lua"){
+				sendLua();
+			} else if(value == "js"){
+				dobet();
+			}
+			amount = nextbet;
+			
+			target_multi = 99 / chance;
+			lastBet.amount = json.data.diceRoll.amount;
+			lastBet.target = json.data.diceRoll.state.target;
+			DiceBet(amount, chance, bethigh)
+		}
+		if(json.data.hasOwnProperty("limboBet"))
+		{
+			
+			var table = document.getElementById("wdbHistory");
+			var multiplierOut = json.data.limboBet.payoutMultiplier;
+			var nicname = "";
+			var crpamount = json.data.limboBet.amount;
+			var payout = json.data.limboBet.payout;
+			
+			var str_amount = crpamount;
+			var str_payout = payout.toFixed(8);
+			var str_payoutMultiplier = multiplierOut.toFixed(2);
+			var str_currency = currency;
+			var str_game = "limbo";
+			var str_user = "poky1084";
+			var str_updatedAt = "2023"
+			var current_result = json.data.limboBet.state.result.toFixed(2);
+			var multiplierTarget = json.data.limboBet.state.multiplierTarget.toFixed(2);
+			
+			lastBet.amount = json.data.limboBet.amount;
+			lastBet.payoutMultiplier = json.data.limboBet.payoutMultiplier;
+			lastBet.Roll = json.data.limboBet.state.result;
+			lastBet.chance = 99 / json.data.limboBet.state.multiplierTarget;
+			lastBet.payout = json.data.limboBet.payout;
+			lastBet.target = json.data.limboBet.state.multiplierTarget;
+			
+			if(json.data.limboBet.payoutMultiplier > 0){
+				win = true;
+				lastBet.win = true;
+				color = "green"
+				//win
+				winstreak++;
+				wins++;
+				losestreak = 0;
+					
+			} else {
+
+				win = false;
+				lastBet.win = false;
+				color = "red"
+				losses++;
+				losestreak++;
+				winstreak = 0;
+				
+											
+			} 
+		
+			current_profit = parseFloat(json.data.limboBet.payout) - parseFloat(json.data.limboBet.amount);
+			profit_total += parseFloat(json.data.limboBet.payout) - parseFloat(json.data.limboBet.amount);
+			wagered += parseFloat(amount);
+			
+			var row = document.createElement("tr");
+			
+			var tdbets = document.createElement("td");
+			var tdamount = document.createElement("td");
+			var tdhigh = document.createElement("td");
+			var tdTargetChance = document.createElement("td");
+			var tdRollChance= document.createElement("td");
+			var tdProfit = document.createElement("td");
+			var tdPayout = document.createElement("td");
+			var tdTargetNumber = document.createElement("td");
+			var tdRollNumber = document.createElement("td");
+			var tdNonce = document.createElement("td");
+			var tdBetID = document.createElement("td");
+			
+			tdbets.innerHTML = wins + losses;
+			tdamount.innerHTML = json.data.limboBet.amount.toFixed(8)
+			
+			var tdcheck = document.createElement("input");
+			tdcheck.type = "checkbox";
+			tdcheck.name = "checked";
+			tdcheck.checked = "checked";
+			tdcheck.id = "checked";
+			
+			tdhigh.appendChild(tdcheck);
+			tdTargetChance.innerHTML = (99 / json.data.limboBet.state.multiplierTarget).toFixed(4)
+			tdRollChance.innerHTML = (99 / json.data.limboBet.state.result).toFixed(4)
+			tdProfit.innerHTML = current_profit.toFixed(8)
+			tdTargetNumber.innerHTML = ">" + json.data.limboBet.state.multiplierTarget.toFixed(4)
+			lastBet.targetNumber = json.data.limboBet.state.multiplierTarget;
+			tdRollNumber.innerHTML = json.data.limboBet.state.result.toFixed(2)
+			tdNonce.innerHTML = json.data.limboBet.game;
+			tdBetID.innerHTML = json.data.limboBet.id;
+			tdPayout.innerHTML = json.data.limboBet.payout.toFixed(8);
+			
+			row.appendChild(tdbets);
+			row.appendChild(tdamount);
+			row.appendChild(tdhigh);
+			row.appendChild(tdTargetChance);
+			row.appendChild(tdRollChance);
+			row.appendChild(tdProfit);
+			row.appendChild(tdPayout);
+			row.appendChild(tdTargetNumber);
+			row.appendChild(tdRollNumber);
+			row.appendChild(tdNonce);
+			row.appendChild(tdBetID);	
+					
+			
+
+				
+			
+			
+			
+			if(win){
+				row.style.background = "#91F190";
+			} else {
+				row.style.background = "#FFC0CB";
+			}
+			
+			table.prepend(row);
+			
+			if (table.rows.length > document.getElementById("wdbMaxRows").value)
+			{
+				table.deleteRow(table.rows.length - 1);
+			}
+		
+			
+			if(winstreak > losestreak){
+				currentstreak = winstreak;
+			} else {
+				currentstreak = -losestreak;
+			}
+		
+			if(highest_bet[highest_bet.length-1] < json.data.limboBet.amount){
+				highest_bet.pop();
+				highest_bet.push(json.data.limboBet.amount);
+			}
+			if(highest_profit[highest_profit.length-1] < profit_total){
+				highest_profit.pop();
+				highest_profit.push(profit_total);
+			}
+			if(lowest_profit[lowest_profit.length-1] > profit_total){
+				lowest_profit.pop();
+				lowest_profit.push(profit_total);
+			}
+			if(highest_streak[highest_streak.length-1] < currentstreak){
+				highest_streak.pop();
+				highest_streak.push(currentstreak);
+			}
+			if(lowest_streak[lowest_streak.length-1] > currentstreak){
+				lowest_streak.pop();
+				lowest_streak.push(currentstreak);
+			}
+
+			balance = current_balance;
+			profit = profit_total;
+			previousbet = json.data.limboBet.amount;
+			currentprofit = current_profit;
+			betcount++;
+			bets = betcount;
+			chance = 99 / json.data.limboBet.state.multiplierTarget;
+
+			
+			updateChart();
+			
+			
+			//document.getElementById("multi").innerHTML = toFixedNo(json.data.limboBet.state.result, 2);
+			document.getElementById("wdbProfit").innerHTML = profit_total.toFixed(8);
+			document.getElementById("wdbWagered").innerHTML = wagered.toFixed(8);
+			document.getElementById("wdbHighProfit").innerHTML = Math.max.apply(null, highest_profit).toFixed(8);
+			document.getElementById("wdbHighLose").innerHTML = Math.min.apply(null, lowest_profit).toFixed(8);
+			document.getElementById("wdbHighBet").innerHTML = Math.max.apply(null, highest_bet).toFixed(8);
+			document.getElementById("wdbBets").innerHTML = bets;
+			document.getElementById("wdbWins").innerHTML = wins;
+			document.getElementById("wdbLosses").innerHTML = losses;
+			document.getElementById("wdbCurrentStreak").innerHTML = currentstreak;
+			document.getElementById("wdbHighLowStreak").innerHTML = Math.max.apply(null, highest_streak) + " / " + Math.min.apply(null, lowest_streak);
+			document.getElementById("wdbPercentProfit").innerHTML = (profit_total / started_bal * 100).toFixed(2);
+			document.getElementById("wdbPercentWagered").innerHTML = (wagered / started_bal).toFixed(2);
+			
+			lastBet.percent = (profit_total / started_bal * 100)
+			
+			var elem = document.getElementById("wdbMenuMode");
+			var value = elem.options[elem.selectedIndex].value;
+			if(value == "lua"){
+				sendLua();
+			} else if(value == "js"){
+				dobet();
+			}
+			amount = nextbet;
+			
+			target_multi = 99 / chance;
+			lastBet.amount = json.data.limboBet.amount;
+			lastBet.target = json.data.limboBet.state.multiplierTarget;
+			LimboBet(amount, target_multi);
+		}
+
+	}
+}
+
+function stop(){
+	running = false;
+	simrunning = false;
+}
+
+function resetAll(){
+ resetstats();
+ resetChart();
+ deleteTable();
+ deleteLogs();
+}
+
+function payouted(condition, target, edge, maxroll) {
+	var payout = 0;
+  if (condition === 'above') {
+  if(document.getElementById("mirrors").value.includes("primedice")){
+		payout = parseFloat((99.9999999 - edge) / (99.9999999 - target));
+	} else {
+		payout = parseFloat((maxroll - edge) / (maxroll - target));
+	}
+    return payout;
+  } else {
+    payout = parseFloat((maxroll - edge) / target);
+    return payout;
+  }
+  return payout;
+}
+
+function op(roll, condition, target) {
+  var op = {
+    'above': roll > target,
+    'below': roll < target
+  };
+  return op[condition];
+}
+
+
+function RunSimDice(){
+	timeout();
+	function timeout() {
+		setTimeout(function () {
+			if(simrunning){
+				serverSeed = document.getElementById('serverseed').value;
+				clientSeed = document.getElementById('clientseed').value;
+				document.getElementById('nonce').value = nonce;
+				let rolled = 1
+				if(document.getElementById("mirrors").value.includes("primedice")){
+					rolled = generatePrimeDiceResult(serverSeed, clientSeed, nonce) 
+				} else {
+					rolled = generateDiceResult(serverSeed, clientSeed, nonce)
+				}
+				logSim("nonce: " + nonce + "| result: " + toFixedNo(rolled, 4));
+				nonce += 1;
+				document.getElementById('nonce').value = nonce;
+				if(bethigh){
+					if(document.getElementById("mirrors").value.includes("primedice")){
+						target_sim = 100 - chance;
+					} else {
+						target_sim = 100 - chance;			
+					}
+					condition_sim = "above";	
+				} else {
+					target_sim = chance;
+					condition_sim = "below";
+				}
+				
+				multiplier = payouted(condition_sim, target_sim, 1, 100);
+				if (op(rolled, condition_sim, target_sim)){
+					win = true;
+					lastBet.win = true;
+					color = "green"
+					//win
+					winstreak++;
+					wins++;
+					losestreak = 0;
+				} else {
+					win = false;
+					lastBet.win = false;
+					color = "red"
+					losses++;
+					losestreak++;
+					winstreak = 0;
+					multiplier = 0;
+				}
+				
+			var table = document.getElementById("wdbHistory");
+			
+			
+			lastBet.amount = nextbet;
+			lastBet.payoutMultiplier = multiplier;
+			lastBet.Roll = rolled;
+			lastBet.payout = multiplier * nextbet;
+			lastBet.target = chance;
+			if(condition_sim == "below"){
+				bethigh = false;
+			} else {
+				bethigh = true;
+			}
+			
+			if(bethigh == false){
+				lastBet.chance = chance;
+			} else {
+				if(document.getElementById("mirrors").value.includes("primedice")){
+					lastBet.chance = 100 - 0.01 - chance;
+				} else {
+					lastBet.chance = 100 - chance;
+				}
+			}
+			
+			
+		
+			current_profit = (nextbet * multiplier) - nextbet
+			profit_total += (nextbet * multiplier) - nextbet
+			wagered += parseFloat(nextbet);
+			balance_sim += (nextbet * multiplier) - nextbet
+			balance =  balance_sim;
+			bet_sim = nextbet;
+			
+			var row = document.createElement("tr");
+			
+			var tdbets = document.createElement("td");
+			var tdamount = document.createElement("td");
+			var tdhigh = document.createElement("td");
+			var tdTargetChance = document.createElement("td");
+			var tdRollChance= document.createElement("td");
+			var tdProfit = document.createElement("td");
+			var tdPayout = document.createElement("td");
+			var tdTargetNumber = document.createElement("td");
+			var tdRollNumber = document.createElement("td");
+			var tdNonce = document.createElement("td");
+			var tdBetID = document.createElement("td");
+			
+			tdbets.innerHTML = wins + losses;
+			tdamount.innerHTML = bet_sim.toFixed(8)
+			
+			var tdcheck = document.createElement("input");
+			tdcheck.type = "checkbox";
+			tdcheck.name = "checked";
+			if(bethigh){
+				tdcheck.checked = true;
+			} else {
+				tdcheck.checked = false;
+			}
+			tdcheck.id = "checked";
+			
+			tdhigh.appendChild(tdcheck);
+			
+			if(bethigh == false){
+				tdTargetChance.innerHTML = lastBet.chance.toFixed(4)
+				tdRollChance.innerHTML = toFixedNo(rolled, 4);
+			} else {
+				tdTargetChance.innerHTML = (100 - lastBet.chance).toFixed(4)
+				if(document.getElementById("mirrors").value.includes("primedice")){
+					tdRollChance.innerHTML = (100 - 0.01 - rolled).toFixed(4)
+				} else {
+					tdRollChance.innerHTML = (100 - rolled).toFixed(4)
+				}
+			}
+			
+			tdProfit.innerHTML = current_profit.toFixed(8)
+			
+			if(bethigh){
+				if(document.getElementById("mirrors").value.includes("primedice")){
+					lastBet.targetNumber = (99 /  (100 - lastBet.chance - 0.01));
+					tdTargetNumber.innerHTML = ">" + (99 /  (100 - lastBet.chance - 0.01)).toFixed(4)
+				} else {
+					lastBet.targetNumber = (99 / (100 - lastBet.chance));
+					tdTargetNumber.innerHTML = ">" + (99 / (100 - lastBet.chance)).toFixed(4)
+				}
+			} else {
+				lastBet.targetNumber = (99 / lastBet.chance);
+				tdTargetNumber.innerHTML = ">" + (99 / lastBet.chance).toFixed(4)
+			}
+			
+			
+			tdRollNumber.innerHTML = toFixedNo(rolled, 4);
+			tdNonce.innerHTML = "sim";
+			tdBetID.innerHTML = "id";
+			tdPayout.innerHTML = lastBet.payout.toFixed(8);
+			
+			row.appendChild(tdbets);
+			row.appendChild(tdamount);
+			row.appendChild(tdhigh);
+			row.appendChild(tdTargetChance);
+			row.appendChild(tdRollChance);
+			row.appendChild(tdProfit);
+			row.appendChild(tdPayout);
+			row.appendChild(tdTargetNumber);
+			row.appendChild(tdRollNumber);
+			row.appendChild(tdNonce);
+			row.appendChild(tdBetID);			
+					
+			
+
+				
+			
+			
+			
+			if(win){
+				row.style.background = "#91F190";
+			} else {
+				row.style.background = "#FFC0CB";
+			}
+			
+			table.prepend(row);
+			
+			if (table.rows.length > document.getElementById("wdbMaxRows").value)
+			{
+				table.deleteRow(table.rows.length - 1);
+			}
+		
+			
+			if(winstreak > losestreak){
+				currentstreak = winstreak;
+			} else {
+				currentstreak = -losestreak;
+			}
+		
+			if(highest_bet[highest_bet.length-1] < nextbet){
+				highest_bet.pop();
+				highest_bet.push(nextbet);
+			}
+			if(highest_profit[highest_profit.length-1] < profit_total){
+				highest_profit.pop();
+				highest_profit.push(profit_total);
+			}
+			if(lowest_profit[lowest_profit.length-1] > profit_total){
+				lowest_profit.pop();
+				lowest_profit.push(profit_total);
+			}
+			if(highest_streak[highest_streak.length-1] < currentstreak){
+				highest_streak.pop();
+				highest_streak.push(currentstreak);
+			}
+			if(lowest_streak[lowest_streak.length-1] > currentstreak){
+				lowest_streak.pop();
+				lowest_streak.push(currentstreak);
+			}
+
+			profit = profit_total;
+			previousbet = lastBet.amount
+			currentprofit = current_profit;
+			betcount++;
+			bets = betcount;
+		
+			
+			updateChart();
+			
+			var balan = document.getElementById("wdbBalance");
+			balan.innerHTML = balance_sim.toFixed(8);
+			//document.getElementById("multi").innerHTML = toFixedNo(json.data.limboBet.state.result, 2);
+			document.getElementById("wdbProfit").innerHTML = profit_total.toFixed(8);
+			document.getElementById("wdbWagered").innerHTML = wagered.toFixed(8);
+			document.getElementById("wdbHighProfit").innerHTML = Math.max.apply(null, highest_profit).toFixed(8);
+			document.getElementById("wdbHighLose").innerHTML = Math.min.apply(null, lowest_profit).toFixed(8);
+			document.getElementById("wdbHighBet").innerHTML = Math.max.apply(null, highest_bet).toFixed(8);
+			document.getElementById("wdbBets").innerHTML = bets;
+			document.getElementById("wdbWins").innerHTML = wins;
+			document.getElementById("wdbLosses").innerHTML = losses;
+			document.getElementById("wdbCurrentStreak").innerHTML = currentstreak;
+			document.getElementById("wdbHighLowStreak").innerHTML = Math.max.apply(null, highest_streak) + " / " + Math.min.apply(null, lowest_streak);
+			document.getElementById("wdbPercentProfit").innerHTML = (profit_total / started_bal * 100).toFixed(2);
+			document.getElementById("wdbPercentWagered").innerHTML = (wagered / started_bal).toFixed(2);
+			
+			lastBet.percent = (profit_total / started_bal * 100)
+				
+				
+
+				var elem = document.getElementById("wdbMenuMode");
+				var value = elem.options[elem.selectedIndex].value;
+				if(value == "lua"){
+					sendLua();
+				} else if(value == "js"){
+					dobet();
+				}
+				 if(balance_sim >= nextbet){
+					timeout();
+				  } else {
+					log('No enough balance to play.')
+					btnStartSim.disabled = false;
+					btnStart.disabled = false;
+				 }
+				
+			}
+		}, 1);
+	}
+}
+
+var btnStartSim = document.getElementById("runsim");
+btnStartSim.addEventListener('click', function() {  
+	btnStartSim.disabled = true;
+	running = false; 
+	simrunning = true; 
+	nonce = parseInt(document.getElementById('nonce').value);
+	localStorage.setItem("jscode", htmlEditor2.getValue());
+	localStorage.setItem("luacode", htmlEditor.getValue());
+	
+	var elem = document.getElementById("wdbMenuMode");
+	var value = elem.options[elem.selectedIndex].value;
+	if(value == "lua"){
+		var code = htmlEditor.getValue();
+			code = code.replace(/!=/g, "~=");
+			code = code.replace(/!/g, "not ");
+			code = code.replace(/([a-zA-Z]*[0-9]*\s*)\+\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1+$2 ');
+			code = code.replace(/([a-zA-Z]*[0-9]*\s*)\-\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1-$2 ');
+			code = code.replace(/([a-zA-Z]*[0-9]*\s*)\*\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1*$2 ');
+			code = code.replace(/([a-zA-Z]*[0-9]*\s*)\/\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1/$2 ');
+			fengari.load(code)();
+			nextbet = fengari.load('return nextbet')();
+			chance = fengari.load('return chance')();
+			bethigh = fengari.load('return bethigh')();
+			balance_sim = fengari.load('return balance')();
+	} else if(value == "js"){
+		eval(htmlEditor2.getValue());
+		balance_sim = balance;
+	}		
+ 
+ //currency = document.getElementById('wdbMenuCoin').value;
+ 
+ btnStart.disabled = true; 
+ //tokenapi = document.getElementById("tokenkey").value; 
+ //userBalances(); 
+ bet_sim = nextbet;
+ started_bal = balance_sim; 
+ balance = started_bal
+ //amount = nextbet;
+
+	var selectedGame = document.getElementById("gameselect").value;
+	if(selectedGame == "dice"){
+		RunSimDice();
+		drawChart();
+	} else if(selectedGame == "limbo"){
+		 drawChart();
+	}
+
+
+
+}, false);
+
+var btnStopSim = document.getElementById("stopsim");
+btnStopSim.addEventListener('click', function() {  simrunning = false; btnStartSim.disabled = false; btnStart.disabled = false;}, false);
+
+
+
+function generateDiceResult(serverSeed, clientSeed, nonce) {
+  let round = 0;
+  let nonceSeed = `${clientSeed}:${nonce}:${round}`;
+  let hash = CryptoJS.HmacSHA256(nonceSeed, serverSeed).toString();
+  let i = 0;
+  let end = 0;
+  while (i < 4) {
+      end += parseInt(hash.substring(i * 2, i * 2 + 2), 16) / Math.pow(256, i + 1);
+      i++;
+  }
+  end *= 10001;
+  end = parseInt(end) / 100 
+  //end = parseFloat(end)
+  return end
+}
+
+
+
+function generatePrimeDiceResult(serverSeed, clientSeed, nonce) {
+  const nonceClientSeed = `${clientSeed}-${nonce}`;
+
+  const hex =  CryptoJS.HmacSHA512(nonceClientSeed, serverSeed).toString();
+
+  let index = 0;
+
+  let lucky = parseInt(hex.substring(index * 5, index * 5 + 5), 16);
+
+  while (lucky >= 1e6) {
+    index += 1;
+    lucky = parseInt(hex.substring(index * 5, index * 5 + 5), 16);
+
+    // we have reached the end of the hash and they all must have been ffffff
+    if (index * 5 + 5 > 129) {
+      lucky = 9999;
+      break;
+    }
+  }
+
+  return [lucky % 1e4] * 1e-2;
+}
+
+
+function resetstats(){
+	losestreak = 0;
+	winstreak  = 0;
+	highest_streak = [0];
+	lowest_streak = [0];
+	current_balance = 0;
+	betcount = 0;
+	bets = 0
+	wins = 0;
+	losses = 0;
+	wagered = 0;
+	profit_total = 0;
+	highest_profit = [0];
+	lowest_profit = [0];
+	highest_bet = [0];
+	currentstreak = 0;
+	profit = 0;
+	currentprofit = 0;
+	current_profit = 0;
+	started_bal = balance;
+
+	profit = profit_total;
+	currentprofit = current_profit;
+	bets = betcount;
+	document.getElementById("wdbPercentProfit").innerHTML = (profit_total / started_bal * 100).toFixed(2);
+	document.getElementById("wdbPercentWagered").innerHTML = (wagered / started_bal).toFixed(2);
+	
+	
+	resetChart();
+	
+	document.getElementById("wdbProfit").innerHTML = profit_total.toFixed(8);
+	document.getElementById("wdbWagered").innerHTML = wagered.toFixed(8);
+	document.getElementById("wdbHighProfit").innerHTML = Math.max.apply(null, highest_profit).toFixed(8);
+	document.getElementById("wdbHighLose").innerHTML = Math.min.apply(null, lowest_profit).toFixed(8);
+	document.getElementById("wdbHighBet").innerHTML = Math.max.apply(null, highest_bet).toFixed(8);
+	document.getElementById("wdbBets").innerHTML = bets;
+	document.getElementById("wdbWins").innerHTML = wins;
+	document.getElementById("wdbLosses").innerHTML = losses;
+	document.getElementById("wdbCurrentStreak").innerHTML = currentstreak;
+	document.getElementById("wdbHighLowStreak").innerHTML = Math.max.apply(null, highest_streak) + " / " + Math.min.apply(null, lowest_streak);
+}
+
+function loadLua() {
+    fengari.load(`function resetseed(n)
+        js.global:resetseed(n)
+    end`)()
+    fengari.load(`function log(n)
+        js.global:log(n)
+    end`)()
+    fengari.load(`function start()
+        js.global:sTart()
+    end`)()
+    fengari.load(`function stop()
+        js.global:stop()
+    end`)()
+    fengari.load(`function resetstats()
+        js.global:resetstats()
+    end`)()
+	fengari.load(`function sleep(n)
+        js.global:sLeep(n)
+    end`)()
+    fengari.load('balance=' + balance + '\nnextbet=' + nextbet + '\nbethigh=' + bethigh + '\nchance=' + chance + '\ncurrency=' + currency)()
+}
+
+function sendLua() {
+    fengari.load('previousbet=' + previousbet + '\nwin=' + win + '\nbalance=' + balance + '\nprofit=' + profit_total + '\ncurrentprofit=' + currentprofit + '\ncurrency=' + currency)()
+    fengari.load('bets=' + betcount + '\wins=' + wins + '\nlosses=' + losses + '\nwinstreak=' + winstreak + '\nlosestreak=' + losestreak + '\ncurrentstreak=' + currentstreak)()
+	fengari.load('lastBet={\nchance=' + lastBet.chance + ',\nRoll=' + lastBet.Roll + ',\ntarget=' + lastBet.target + ',\npayout=' + lastBet.payout + ',\ntargetNumber=' + lastBet.targetNumber + ',\namount=' + lastBet.amount + ',\npercent=' + lastBet.percent + ',\nnonce=' + 0 + ',\nid=' + "x" + ',\nprofit=' + profit_total + '\n}')()
+    fengari.load('dobet()')()
+	nextbet = fengari.load('return nextbet')();
+	chance = fengari.load('return chance')();
+	bethigh = fengari.load('return bethigh')();
+}
+
+function sTart(){
+		running = true; countTime(); 
+		var elem = document.getElementById("wdbMenuMode");
+		var value = elem.options[elem.selectedIndex].value;
+		if(value == "lua"){
+			var code = htmlEditor.getValue();
+				code = code.replace(/!=/g, "~=");
+				code = code.replace(/!/g, "not ");
+				code = code.replace(/([a-zA-Z]*[0-9]*\s*)\+\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1+$2 ');
+				code = code.replace(/([a-zA-Z]*[0-9]*\s*)\-\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1-$2 ');
+				code = code.replace(/([a-zA-Z]*[0-9]*\s*)\*\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1*$2 ');
+				code = code.replace(/([a-zA-Z]*[0-9]*\s*)\/\=(\s*[a-zA-Z]*[0-9]*)/g, '$1=$1/$2 ');
+				fengari.load(code)();
+				nextbet = fengari.load('return nextbet')();
+				chance = fengari.load('return chance')();
+				bethigh = fengari.load('return bethigh')();
+		} else if(value == "js"){
+			eval(htmlEditor2.getValue());
+		}		
+
+	localStorage.setItem("jscode", htmlEditor2.getValue());
+	localStorage.setItem("luacode", htmlEditor.getValue());
+ 
+ currency = document.getElementById('wdbMenuCoin').value;
+ 
+ btnStart.disabled = true; 
+ tokenapi = document.getElementById("tokenkey").value; 
+ userBalances(); 
+ started_bal = balance; 
+ amount = nextbet;
+	var selectedGame = document.getElementById("gameselect").value;
+	if(selectedGame == "dice"){
+		DiceBet(amount, chance, bethigh)
+	} else if(selectedGame == "limbo"){
+		LimboBet(nextbet, 99 / chance); 
+	}
+ 
+ drawChart();
+
+}
+var btnStart = document.getElementById("wdbStartButton");
+
+btnStart.addEventListener('click', function() {  if(document.getElementById("tokenkey").value.length < 96){return;}; sTart();}, false);
+
+var btnStop = document.getElementById("wdbStopButton");
+btnStop.addEventListener('click', function() {  btnStart.disabled = false; running = false; }, false);
+
+
+function startScoket(){
+var mirror = document.getElementById("mirrors").value;
+let websocket = new WebSocket('wss://' + mirror + '/_api/websockets', 'graphql-transport-ws');
+    
+  // Event handler for successful WebSocket connection
+  websocket.onopen = () => {
+    // Send the GraphQL subscription query as a JSON string
+    websocket.send(JSON.stringify({"type":"connection_init","payload":{"accessToken":tokenapi,"language":"en","lockdownToken":"s5MNWtjTM5TvCMkAzxov"}}));
+  };
+
+  // Event handler for incoming messages
+  websocket.onmessage = (event) => {
+    //console.log('Received message:', event.data);
+			const obj = JSON.parse(event.data);		
+			if (obj.hasOwnProperty("payload")) {
+				if (obj.payload.data.hasOwnProperty("availableBalances")) {
+					if(obj.payload.data.availableBalances.balance.currency == currency){
+					if(simrunning == false){
+						var balan = document.getElementById("wdbBalance");
+						balan.innerHTML = obj.payload.data.availableBalances.balance.amount.toFixed(8);
+						current_balance = obj.payload.data.availableBalances.balance.amount;
+						balance = current_balance;
+						}
+					}
+				} 
+			}
+				
+  if(event.data.includes("connection_ack")){
+  
+		websocket.send(JSON.stringify({"id":"e0f09352-0cc1-4485-8acf-ca53caccb5a8","type":"subscribe","payload":{"query":"subscription AvailableBalances {\n  availableBalances {\n    amount\n    identifier\n    balance {\n      amount\n      currency\n    }\n  }\n}\n"}}));
+	
+  };
+  }
+  // Event handler for WebSocket errors
+  websocket.onerror = (error) => {
+    console.error('WebSocket error:', error);
+	startScoket();
+	//window.location.reload(true);
+  };
+
+  // Event handler for WebSocket connection close
+  websocket.onclose = (event) => {
+ //window.location.reload(true);
+	startScoket();
+    console.log('WebSocket connection closed:', event.code, event.reason);
+  };
+  }
