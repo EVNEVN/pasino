@@ -906,7 +906,7 @@ var errTrue = false; //color background
 var gameNumber = 0;
 var trigger = 1;
 var triggers = 0;
-var strategy = 1;
+var strategy = '';
 //-----------------------
 var mirror = 'stake.com'; // Mirror: stake.bet, stake.games, staketr.com, staketr2.com, staketr3.com, staketr4.com, staketr5.com, stake.bz, stake.jp, stake.ac, stake.icu;
 var token = ''; // API Key API Key -- -> Settings -> API
@@ -1034,7 +1034,7 @@ document.getElementById("currentCoin").onchange = function(){ //Так для р
 	var input_currency = _currency.options[_currency.selectedIndex].value;
 	localStorage.setItem("curr_ency", input_currency);
 		
-	window.location.reload();
+	//window.location.reload();
 }
 
 document.getElementById("_start").onclick = function(){ startDice() } //Так для расширения
@@ -1208,7 +1208,7 @@ function startDice() {
 		}
 		//--------------
 		*/
-		if(strategy == '01'){
+		if(strategy == 'streak'){
 			
 		}
 		
@@ -1495,10 +1495,10 @@ function doBet(){
 						gameNumber++;
 						var resultMultiplier = Number(crashpoint1);
 						
-						if(strategy == 'safe-03'){ 
+						if(strategy == 'streak'){ 
 							pat.push(resultMultiplier);
 							//if(pat[0]>=1.10) pat.shift();
-							if(pat.length > 5){
+							if(pat.length > streakBelow){
 								pat.shift();
 							}
 						}
@@ -1830,7 +1830,7 @@ function doBet(){
 									//Pattern
 									
 									///Streak Below
-									if(strategy == '01'){
+									if(strategy == 'streak'){
 										
 										/*
 										if(pat[0]>2 && pat[1]>2 && pat[2]>2 && pat[3]>2 && pat[4]>2){
@@ -1852,7 +1852,7 @@ function doBet(){
 											
 										}
 										
-										pat.push(resultMultiplier);
+										//pat.push(resultMultiplier);
 										
 										//if(firstMartinPat == false){
 											console.log('%c Result: ', 'color:white; font-size:100%');
@@ -1873,7 +1873,7 @@ function doBet(){
 												$('#log').stop().animate({ scrollTop: $('#log')[0].scrollHeight });
 											}
 										getBalance(function(){
-											/**
+											
 											var pr = balance - llastBalance;
 											llastBalance = balance;
 											if (pr >= 0) {
@@ -1881,7 +1881,7 @@ function doBet(){
 											}else{
 												win = false;
 											}
-											*/
+											
 											profitTotal = balance - startBalance;
 											
 											if(win){
@@ -2152,10 +2152,47 @@ function startBet(){
 	}
 }
 
-function toFixedNo(num, fixed) {
+///-----------------------------
+//не верно считает если число в экспоненте (1e-10,1e+10)
+function __toFixedNo(num, fixed) {
     var re = new RegExp('^-?\\d+(?:\.\\d{0,' + (fixed || -1) + '})?');
     return num.toString().match(re)[0];
 }
+
+function toFixedNo(num, fixed) {
+	//var nnum = Number(num).toFixed(Number(fixed)+100);
+	var nnum = Number(num).noExponents();
+    var re = new RegExp('^-?\\d+(?:\.\\d{0,' + (fixed || -1) + '})?');
+    return nnum.toString().match(re)[0];
+}
+
+Number.prototype.noExponents = function() {
+  var data = String(this).split(/[eE]/);
+  if (data.length == 1) return data[0];
+
+  var z = '',
+    sign = this < 0 ? '-' : '',
+    str = data[0].replace('.', ''),
+    mag = Number(data[1]) + 1;
+
+  if (mag < 0) {
+    z = sign + '0.';
+    while (mag++) z += '0';
+    return z + str.replace(/^\-/, '');
+  }
+  mag -= str.length;
+  while (mag--) z += '0';
+  return str + z;
+}
+//var n = 9.8e-12;
+//console.log(n.noExponents());
+
+//https://developer.mozilla.org/ru/docs/Web/JavaScript/Reference/Global_Objects/Number/toExponential
+
+//Преобразование экспоненциального числа в целое число (1e-10,1e+10)
+//https://ru.stackoverflow.com/questions/688408/%D0%9F%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B4-%D1%8D%D0%BA%D1%81%D0%BF%D0%BE%D0%BD%D0%B5%D0%BD%D1%86%D0%B8%D0%B0%D0%BB%D1%8C%D0%BD%D0%BE%D0%B9-%D0%B7%D0%B0%D0%BF%D0%B8%D1%81%D0%B8-%D1%87%D0%B8%D1%81%D0%BB%D0%B0-%D0%B2-%D0%BE%D0%B1%D1%8B%D1%87%D0%BD%D1%83%D1%8E
+//https://stackoverflow.com/questions/18719775/parsing-and-converting-exponential-values-to-decimal-in-javascript
+///-------------------------------------
 
 var A;
 function getBalance(cb) {
@@ -2664,7 +2701,7 @@ function finishBet(){
 									///if(strategy == 'safe-01'){
 									//if(game == 2){
 										getBalance(function(){
-											/*
+											
 											var pr = balance - llastBalance;
 											llastBalance = balance;
 											if (pr >= 0) {
@@ -2672,7 +2709,7 @@ function finishBet(){
 											}else{
 												win = false;
 											}
-											*/
+											
 											profitTotal = balance - startBalance;
 											
 											if(win){
